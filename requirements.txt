@@ -1,0 +1,14 @@
+Instala todo con: pip install -r requirements.txt
+
+PyQt5==5.15.10
+opencv-python==4.10.0.84
+mediapipe==0.10.14
+Pillow==10.3.0
+scikit-learn==1.5.0
+numpy==1.26.4
+pygame==2.6.1
+matplotlib==3.9.0
+seaborn==0.13.2
+
+# Opcional, acelera el entrenamiento SVM en CPUs Intel (no obligatorio)
+scikit-learn-intelex==2024.5.1
