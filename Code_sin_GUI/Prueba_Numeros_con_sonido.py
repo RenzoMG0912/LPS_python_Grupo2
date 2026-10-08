@@ -16,12 +16,14 @@ except ImportError:
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lsp_features import extraer_vector
+from lsp_tts import Hablante
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SONIDOS_DIR = os.path.join(ROOT_DIR, 'Sonidos')
 MODELO_PATH = os.path.join(ROOT_DIR, 'svm_numeros_lsp_classifier.p')
 
 pygame.mixer.init()
+hablante = Hablante()
 
 with open(MODELO_PATH, 'rb') as f:
     svm_numeros = pickle.load(f)['model']
@@ -78,6 +80,9 @@ while True:
             if os.path.exists(audio_path):
                 pygame.mixer.music.load(audio_path)
                 pygame.mixer.music.play()
+            else:
+                # Sin archivo propio (Sonidos/<clase>.mp3): se dice con la voz del sistema.
+                hablante.decir(prediccion)
 
         frame = dibujar_texto(frame, prediccion, (10, 30), tamano_fuente=50, probabilidad=probabilidades[indice_clase])
 
@@ -89,3 +94,4 @@ while True:
 cap.release()
 cv2.destroyAllWindows()
 pygame.mixer.music.stop()
+hablante.cerrar()

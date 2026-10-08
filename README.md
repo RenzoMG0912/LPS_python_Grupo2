@@ -11,6 +11,7 @@ Artículo base: "Static Arabic Sign Language Recognition in Real Time Using Mach
 - Textos de la interfaz traducidos al español.
 - Eliminado el renderizado y conversión de numerales arábigos (`convert_to_arabic_numerals`), innecesario para español.
 - Rutas de audio y modelos ya no dependen de nombres de archivo en escritura árabe (unicode), sino de las etiquetas en español (`A.mp3`, `0.mp3`, etc.).
+- Salida de voz: la seña reconocida se anuncia por el altavoz. Si existe `Sonidos/<clase>.mp3` se reproduce ese archivo; si no, la etiqueta se dice con la **voz del sistema** (TTS offline con `pyttsx3`), prefiriendo una voz en español si está instalada.
 
 **Captura por vectores en vivo (`GUI/data_collection_widget.py`)**
 El flujo original guardaba imágenes `.jpg` por clase y solo después las vectorizaba con MediaPipe al pulsar "Crear Dataset"; en la práctica la captura no llegaba a guardar nada. Ahora la cámara vectoriza directamente: por cada frame se dibujan los landmarks con MediaPipe, se extrae el vector bimanual (`extraer_vector`) y se acumula. Al alcanzar el número de capturas pedido (o al pulsar `Q`) se cierra la cámara y los vectores se **fusionan** con el `dataset.pickle` existente, conservando y ampliando los datos previos.
@@ -37,6 +38,7 @@ El código original solo procesaba de forma consistente una mano; cuando había 
 LSP-ML/
 ├── lsp_labels_dict.py          Diccionario de clases (letras/números) para captura automática
 ├── lsp_features.py             Extractor de vector de landmarks bimanual (usado por todo el proyecto)
+├── lsp_tts.py                  Voz del sistema (TTS offline) para anunciar la seña reconocida
 ├── requirements.txt
 ├── Mis_Datos/                  (Legado) Imágenes por clase; la captura actual guarda vectores directamente en dataset.pickle
 ├── Sonidos/                    Archivos .mp3 nombrados igual que cada clase (A.mp3, 0.mp3, ...)
@@ -65,7 +67,9 @@ LSP-ML/
 6. En **Entrenamiento**, elige el tipo (Letras/Números). El combo de tipo ahora **filtra los datos**: solo se entrena con las clases que correspondan a ese tipo, evitando mezclar letras y números en un mismo modelo. La lista **Clases a incluir en el entrenamiento** muestra las clases que existen en el dataset para ese tipo, todas marcadas; desmarca las que no quieras usar y pulsa **Actualizar clases** si acabas de capturar datos nuevos.
    - Se necesitan **al menos 2 clases marcadas** (un SVM no puede entrenar con una sola); si hay menos, la app lo avisa en lugar de fallar. Cada clase necesita además ≥2 muestras. El número de particiones de la validación cruzada se ajusta automáticamente al tamaño de la clase más pequeña. Revisa el reporte y la matriz de confusión.
    - El nombre del archivo de salida depende del tipo: `svm_letras_lsp_classifier.p` o `svm_numeros_lsp_classifier.p`. Cada vez que entrenas, **se reemplaza** solo el modelo de ese tipo.
-7. En **Prueba**, usa "Probar Letras" o "Probar Numeros" para el reconocimiento en tiempo real con salida de audio. El panel muestra el **estado de los modelos** (qué clases tiene cada uno); los modelos se **recargan al abrir esta pantalla** y antes de encender la cámara, así que puedes entrenar y probar **sin reiniciar la aplicación**.
+7. En **Prueba**, usa "Probar Letras" o "Probar Numeros" para el reconocimiento en tiempo real con salida de audio. El panel muestra el **estado de los modelos** (qué clases tiene cada uno); los modelos se **recargan al abrir esta pantalla** y antes de encender la cámara, así que puedes entrenar y probar **sin reiniciar la aplicación**. La seña predicha se anuncia por el altavoz: si colocas tu propio `Sonidos/<clase>.mp3` se reproduce ese archivo; si no, se dice en voz alta con la voz del sistema (TTS offline). La seña se anuncia al reconocerla y **se repite cada 3 segundos mientras la mantengas**. El botón **Probar Voz** dice una frase de prueba para comprobar el audio sin encender la cámara, y el panel indica el estado de la voz (`Voz: activada (...)` o `Voz: no disponible (falta pyttsx3)`).
+
+> Nota técnica: `pyttsx3` tiene un fallo conocido por el que solo suena la **primera** locución si se reutiliza el mismo motor; por eso `lsp_tts.py` crea un motor nuevo para cada frase (la cola igual se vaciaba, pero no hablaba).
 
 ### Nota sobre el contenido lingüístico
 Este repositorio **no incluye un dataset de imágenes ni grabaciones de audio de la LSP**: el diseño original de la aplicación es que el propio usuario recolecte su dataset con la cámara (módulo de Recolección de Datos). Para que el sistema sea lingüísticamente válido, se recomienda grabar las señas con la guía de un intérprete certificado o material de referencia de la LSP (por ejemplo, el Diccionario de LSP de la PUCP), en vez de improvisar las formas de la mano.

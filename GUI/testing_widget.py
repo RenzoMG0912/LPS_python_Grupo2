@@ -2,6 +2,7 @@ import datetime
 import os
 import pickle
 import sys
+import time
 
 import cv2
 import mediapipe as mp
@@ -15,6 +16,7 @@ from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMessageBox,
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lsp_features import extraer_vector
+from lsp_tts import Hablante
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SONIDOS_DIR = os.path.join(ROOT_DIR, 'Sonidos')
@@ -22,6 +24,8 @@ SONIDOS_DIR = os.path.join(ROOT_DIR, 'Sonidos')
 
 class TestingWidget(QWidget):
     testing_requested = pyqtSignal()
+    # Si mantienes la misma seña, se vuelve a decir cada estos segundos.
+    REPETIR_ANUNCIO_SEGUNDOS = 3.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -31,7 +35,9 @@ class TestingWidget(QWidget):
         self.svm_letras = None
         self.svm_numeros = None
         self.anterior_prediccion = None
+        self.ultimo_anuncio = 0.0
         pygame.mixer.init()
+        self.hablante = Hablante()
         self.init_ui()
         self.load_models()
         self.init_mediapipe()
@@ -97,6 +103,13 @@ class TestingWidget(QWidget):
         self.stop_test_button.clicked.connect(self.stop_video)
         left_column_layout.addWidget(self.stop_test_button)
 
+        self.test_voice_button = QPushButton('Probar Voz', self)
+        self.test_voice_button.setFixedSize(200, 50)
+        self.test_voice_button.setFont(QFont("Arial", 11, QFont.Bold))
+        self.test_voice_button.setStyleSheet("QPushButton { border: 3px solid black; border-radius: 10px; background-color: lightgreen; color: black; } QPushButton:hover { background-color: #CCCCCC; color: black; }")
+        self.test_voice_button.clicked.connect(self.probar_voz)
+        left_column_layout.addWidget(self.test_voice_button)
+
         self.clock_label = QLabel(self)
         self.clock_label.setFont(QFont("Arial", 11))
         self.clock_label.setStyleSheet("border: 3px solid black; border-radius: 10px; background-color: white; color: black; padding: 5px;")
@@ -158,7 +171,8 @@ class TestingWidget(QWidget):
         self.model_status_label.setText(
             'Estado de modelos\n'
             f"Letras: {self._describir_modelo(self.svm_letras)}\n"
-            f"Numeros: {self._describir_modelo(self.svm_numeros)}"
+            f"Numeros: {self._describir_modelo(self.svm_numeros)}\n"
+            f"Voz: {self.hablante.descripcion}"
         )
 
     def init_mediapipe(self):
@@ -184,6 +198,7 @@ class TestingWidget(QWidget):
             return
 
         self.anterior_prediccion = None
+        self.ultimo_anuncio = 0.0
         self.testing_running = True
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
@@ -192,12 +207,14 @@ class TestingWidget(QWidget):
         self.timer.start(30)
 
     def hide_elements(self):
-        for widget in [self.label, self.show_image_button, self.test_model_button, self.test_number_button, self.stop_test_button]:
+        for widget in [self.label, self.show_image_button, self.test_model_button, self.test_number_button,
+                       self.stop_test_button, self.test_voice_button]:
             widget.hide()
 
     def show_elements(self):
         self.reload_models()
-        for widget in [self.label, self.show_image_button, self.test_model_button, self.test_number_button, self.stop_test_button]:
+        for widget in [self.label, self.show_image_button, self.test_model_button, self.test_number_button,
+                       self.stop_test_button, self.test_voice_button]:
             widget.show()
 
     def show_test_model(self):
@@ -239,6 +256,35 @@ class TestingWidget(QWidget):
         draw.text(posicion, texto, font=fuente, fill=(0, 0, 255, 255))
         return cv2.cvtColor(np.array(imagen_pil), cv2.COLOR_RGB2BGR)
 
+    def _debe_anunciar(self, texto_predicho):
+        """Decide si hay que anunciar la seña: cuando cambia, o cuando se mantiene
+        la misma mas de REPETIR_ANUNCIO_SEGUNDOS sin haberse anunciado."""
+        ahora = time.time()
+        if texto_predicho != self.anterior_prediccion:
+            self.anterior_prediccion = texto_predicho
+            self.ultimo_anuncio = ahora
+            return True
+        if (ahora - self.ultimo_anuncio) >= self.REPETIR_ANUNCIO_SEGUNDOS:
+            self.ultimo_anuncio = ahora
+            return True
+        return False
+
+    def probar_voz(self):
+        """Dice una frase de prueba para comprobar que el altavoz y la voz funcionan."""
+        self.hablante.decir('Prueba de voz del reconocimiento de lengua de senas peruana')
+
+    def _anunciar_prediccion(self, texto_predicho):
+        """Dice la seña reconocida: usa el mp3 propio (Sonidos/<clase>.mp3) si existe;
+        si no, la dice en voz alta con la voz del sistema (TTS)."""
+        audio_path = os.path.join(SONIDOS_DIR, f'{texto_predicho}.mp3')
+        if os.path.exists(audio_path):
+            print(f'[Prueba] reproduciendo mp3: {audio_path}', flush=True)
+            pygame.mixer.music.load(audio_path)
+            pygame.mixer.music.play()
+        else:
+            print(f'[Prueba] sena reconocida: {texto_predicho} (se dice con TTS)', flush=True)
+            self.hablante.decir(texto_predicho)
+
     def stop_video(self):
         self.testing_running = False
         self.timer.stop()
@@ -275,12 +321,8 @@ class TestingWidget(QWidget):
                 prediccion = modelo.predict([vector])[0]
                 texto_predicho = str(prediccion)
 
-                if texto_predicho != self.anterior_prediccion:
-                    self.anterior_prediccion = texto_predicho
-                    audio_path = os.path.join(SONIDOS_DIR, f'{texto_predicho}.mp3')
-                    if os.path.exists(audio_path):
-                        pygame.mixer.music.load(audio_path)
-                        pygame.mixer.music.play()
+                if self._debe_anunciar(texto_predicho):
+                    self._anunciar_prediccion(texto_predicho)
 
         frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
 
