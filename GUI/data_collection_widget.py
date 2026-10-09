@@ -33,6 +33,7 @@ ANCHO_VENTANA, ALTO_VENTANA = 960, 720
 INTERVALO_CAPTURA = 0.08  # segundos minimos entre dos capturas (~12 por segundo)
 DETECTION_CONFIDENCE = 0.5
 TRACKING_CONFIDENCE = 0.5
+CUENTA_REGRESIVA = 3  # segundos de cuenta regresiva tras pulsar ESPACIO (0 = sin cuenta)
 
 
 class DataCollectionWidget(QWidget):
@@ -289,37 +290,105 @@ class DataCollectionWidget(QWidget):
             min_tracking_confidence=TRACKING_CONFIDENCE,
         )
 
-    def _capturar_clase(self, cap, manos, class_label, objetivo):
-        """Captura en vivo `objetivo` vectores de landmarks para una clase.
+    def _leer_frame(self, cap, manos):
+        """Lee un frame, lo procesa con MediaPipe y dibuja los landmarks encima.
 
-        Devuelve (vectores, estado) con estado en {'ok', 'cancelado', 'error'}:
-        - 'ok': se alcanzo el objetivo o el usuario pulso Q (se guardaran los vectores).
-        - 'cancelado': el usuario pulso ESC (no se guarda nada).
-        - 'error': fallo la lectura de la camara.
+        Devuelve (frame, resultados), o (None, None) si fallo la lectura de la camara.
         """
+        ret, frame = cap.read()
+        if not ret:
+            return None, None
+
+        frame = cv2.resize(frame, (ANCHO_VENTANA, ALTO_VENTANA))
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        resultados = manos.process(frame_rgb)
+
+        if resultados.multi_hand_landmarks:
+            dibujo = mp.solutions.drawing_utils
+            estilos = mp.solutions.drawing_styles
+            for mano in resultados.multi_hand_landmarks:
+                dibujo.draw_landmarks(
+                    frame, mano, mp.solutions.hands.HAND_CONNECTIONS,
+                    estilos.get_default_hand_landmarks_style(),
+                    estilos.get_default_hand_connections_style(),
+                )
+        return frame, resultados
+
+    def _esperar_inicio(self, cap, manos, class_label, progreso='', aviso_previo=''):
+        """Pantalla de espera previa a grabar una clase. NO captura ningun vector.
+
+        Muestra la camara en vivo para que el usuario coloque la mano. ESPACIO
+        inicia (tras la cuenta regresiva, si CUENTA_REGRESIVA > 0) y ESC cancela.
+
+        Devuelve 'ok', 'cancelado' o 'error'.
+        """
+        titulo = f'Clase {class_label}' + (f' ({progreso})' if progreso else '')
+
+        while True:
+            frame, _ = self._leer_frame(cap, manos)
+            if frame is None:
+                return 'error'
+
+            self._dibujar_espera(frame, titulo, 'ESPACIO = empezar    ESC = cancelar', aviso_previo)
+            cv2.imshow(VENTANA_CAPTURA, frame)
+
+            tecla = cv2.waitKey(1) & 0xFF
+            if tecla == 27:
+                return 'cancelado'
+            if tecla == 32:
+                break
+
+        if CUENTA_REGRESIVA > 0:
+            fin_cuenta = time.time() + CUENTA_REGRESIVA
+            while True:
+                restante = fin_cuenta - time.time()
+                if restante <= 0:
+                    break
+
+                frame, _ = self._leer_frame(cap, manos)
+                if frame is None:
+                    return 'error'
+
+                self._dibujar_espera(frame, titulo, 'Coloca la mano en posicion    ESC = cancelar',
+                                     cuenta=int(restante) + 1)
+                cv2.imshow(VENTANA_CAPTURA, frame)
+
+                if cv2.waitKey(1) & 0xFF == 27:
+                    return 'cancelado'
+
+        return 'ok'
+
+    def _dibujar_espera(self, frame, titulo, ayuda, aviso_previo='', cuenta=None):
+        alto, ancho = frame.shape[:2]
+        cv2.rectangle(frame, (0, 0), (ancho, 120), (0, 0, 0), -1)
+        cv2.putText(frame, titulo, (20, 45), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3, cv2.LINE_AA)
+        cv2.putText(frame, ayuda, (20, 95), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2, cv2.LINE_AA)
+        if aviso_previo:
+            cv2.putText(frame, aviso_previo, (20, 165), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2, cv2.LINE_AA)
+        if cuenta is not None:
+            texto = str(cuenta)
+            (ancho_texto, alto_texto), _ = cv2.getTextSize(texto, cv2.FONT_HERSHEY_SIMPLEX, 8, 16)
+            cv2.putText(frame, texto, ((ancho - ancho_texto) // 2, (alto + alto_texto) // 2),
+                        cv2.FONT_HERSHEY_SIMPLEX, 8, (0, 255, 255), 16, cv2.LINE_AA)
+
+    def _capturar_clase(self, cap, manos, class_label, objetivo, progreso='', aviso_previo=''):
+        """Captura en vivo vectores de landmarks para una clase.
+        """
+        estado_espera = self._esperar_inicio(cap, manos, class_label, progreso, aviso_previo)
+        if estado_espera != 'ok':
+            return [], estado_espera
+
         vectores = []
-        dibujo = mp.solutions.drawing_utils
-        estilos = mp.solutions.drawing_styles
         ultimo_capturado = 0.0
 
         while True:
-            ret, frame = cap.read()
-            if not ret:
+            frame, resultados = self._leer_frame(cap, manos)
+            if frame is None:
                 return vectores, 'error'
 
-            frame = cv2.resize(frame, (ANCHO_VENTANA, ALTO_VENTANA))
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            resultados = manos.process(frame_rgb)
             mano_detectada = bool(resultados.multi_hand_landmarks)
 
             if mano_detectada:
-                for mano in resultados.multi_hand_landmarks:
-                    dibujo.draw_landmarks(
-                        frame, mano, mp.solutions.hands.HAND_CONNECTIONS,
-                        estilos.get_default_hand_landmarks_style(),
-                        estilos.get_default_hand_connections_style(),
-                    )
-
                 ahora = time.time()
                 if len(vectores) < objetivo and (ahora - ultimo_capturado) >= INTERVALO_CAPTURA:
                     vectores.append(extraer_vector(resultados.multi_hand_landmarks, resultados.multi_handedness))
@@ -408,7 +477,11 @@ class DataCollectionWidget(QWidget):
                 self.label4.setText(f'Capturando clase {class_label} ({posicion}/{self.number_of_classes})')
                 self.label4.repaint()
 
-                vectores, estado = self._capturar_clase(cap, manos, class_label, self.dataset_size)
+                aviso_previo = (f'{guardadas[-1][0]}: {guardadas[-1][1]} muestras guardadas'
+                                if guardadas else '')
+                vectores, estado = self._capturar_clase(
+                    cap, manos, class_label, self.dataset_size,
+                    progreso=f'{posicion}/{self.number_of_classes}', aviso_previo=aviso_previo)
                 if estado == 'error':
                     estado_final = 'error'
                     break
@@ -430,6 +503,10 @@ class DataCollectionWidget(QWidget):
         if estado_final == 'error':
             self.label4.setText('Recoleccion interrumpida por un error de camara.')
             QMessageBox.critical(self, "Error", "Fallo al leer la camara.")
+            return
+
+        if total_nuevo == 0 and estado_final == 'cancelado':
+            self.label4.setText('Recoleccion cancelada. El dataset no cambio.')
             return
 
         if total_nuevo == 0:
