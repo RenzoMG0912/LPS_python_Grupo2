@@ -34,6 +34,10 @@ INTERVALO_CAPTURA = 0.08  # segundos minimos entre dos capturas (~12 por segundo
 DETECTION_CONFIDENCE = 0.5
 TRACKING_CONFIDENCE = 0.5
 CUENTA_REGRESIVA = 3  # segundos de cuenta regresiva tras pulsar ESPACIO (0 = sin cuenta)
+IMAGES_DIR = os.path.join(ROOT_DIR, 'Imagenes_capturadas')
+GUARDAR_IMAGENES = True  # guarda tambien el frame de cada vector en Imagenes_capturadas/<clase>/
+CALIDAD_JPEG = 95        # 0-100; mas alto = mejor calidad y mas peso por imagen
+ID_PERSONA = 'p01'       # cambialo segun quien captura: va en el nombre de cada imagen
 
 
 class DataCollectionWidget(QWidget):
@@ -290,16 +294,14 @@ class DataCollectionWidget(QWidget):
             min_tracking_confidence=TRACKING_CONFIDENCE,
         )
 
-    def _leer_frame(self, cap, manos):
-        """Lee un frame, lo procesa con MediaPipe y dibuja los landmarks encima.
-
-        Devuelve (frame, resultados), o (None, None) si fallo la lectura de la camara.
-        """
+    def _leer_frame(self, cap, manos, copia_limpia=False):
+        """Lee un frame, lo procesa con MediaPipe y dibuja los landmarks encima."""
         ret, frame = cap.read()
         if not ret:
-            return None, None
+            return None, None, None
 
         frame = cv2.resize(frame, (ANCHO_VENTANA, ALTO_VENTANA))
+        limpio = frame.copy() if copia_limpia else None
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         resultados = manos.process(frame_rgb)
 
@@ -312,7 +314,7 @@ class DataCollectionWidget(QWidget):
                     estilos.get_default_hand_landmarks_style(),
                     estilos.get_default_hand_connections_style(),
                 )
-        return frame, resultados
+        return frame, resultados, limpio
 
     def _esperar_inicio(self, cap, manos, class_label, progreso='', aviso_previo=''):
         """Pantalla de espera previa a grabar una clase. NO captura ningun vector.
@@ -325,7 +327,7 @@ class DataCollectionWidget(QWidget):
         titulo = f'Clase {class_label}' + (f' ({progreso})' if progreso else '')
 
         while True:
-            frame, _ = self._leer_frame(cap, manos)
+            frame, _, _ = self._leer_frame(cap, manos)
             if frame is None:
                 return 'error'
 
@@ -345,7 +347,7 @@ class DataCollectionWidget(QWidget):
                 if restante <= 0:
                     break
 
-                frame, _ = self._leer_frame(cap, manos)
+                frame, _, _ = self._leer_frame(cap, manos)
                 if frame is None:
                     return 'error'
 
@@ -371,18 +373,42 @@ class DataCollectionWidget(QWidget):
             cv2.putText(frame, texto, ((ancho - ancho_texto) // 2, (alto + alto_texto) // 2),
                         cv2.FONT_HERSHEY_SIMPLEX, 8, (0, 255, 255), 16, cv2.LINE_AA)
 
+    @staticmethod
+    def _nombre_carpeta_seguro(etiqueta):
+        """Etiqueta -> nombre de carpeta valido en Windows (cambia < > : " / \\ | ? * por _)."""
+        nombre = ''.join('_' if c in '<>:"/\\|?*' else c for c in str(etiqueta).strip())
+        return nombre or '_'
+
+    def _guardar_imagenes(self, etiqueta, imagenes):
+        """Escribe en Imagenes_capturadas/<etiqueta>/ los JPEG de una clase ya aceptada."""
+        if not GUARDAR_IMAGENES or not imagenes:
+            return 0
+        carpeta = os.path.join(IMAGES_DIR, self._nombre_carpeta_seguro(etiqueta))
+        sesion = time.strftime('%Y%m%d_%H%M%S')
+        escritas = 0
+        try:
+            os.makedirs(carpeta, exist_ok=True)
+            for i, datos in enumerate(imagenes, start=1):
+                ruta = os.path.join(carpeta, f'{ID_PERSONA}_{sesion}_{i:03d}.jpg')
+                with open(ruta, 'wb') as archivo:
+                    archivo.write(datos)
+                escritas += 1
+        except OSError as error:
+            print(f'No se pudieron guardar las imagenes de {etiqueta}: {error}')
+        return escritas
+
     def _capturar_clase(self, cap, manos, class_label, objetivo, progreso='', aviso_previo=''):
-        """Captura en vivo vectores de landmarks para una clase.
-        """
+        #Captura en vivo `objetivo` vectores de landmarks para una clase.
         estado_espera = self._esperar_inicio(cap, manos, class_label, progreso, aviso_previo)
         if estado_espera != 'ok':
             return [], estado_espera
 
         vectores = []
+        imagenes = []  # JPEG ya codificados en memoria, uno por vector
         ultimo_capturado = 0.0
 
         while True:
-            frame, resultados = self._leer_frame(cap, manos)
+            frame, resultados, limpio = self._leer_frame(cap, manos, copia_limpia=GUARDAR_IMAGENES)
             if frame is None:
                 return vectores, 'error'
 
@@ -392,6 +418,10 @@ class DataCollectionWidget(QWidget):
                 ahora = time.time()
                 if len(vectores) < objetivo and (ahora - ultimo_capturado) >= INTERVALO_CAPTURA:
                     vectores.append(extraer_vector(resultados.multi_hand_landmarks, resultados.multi_handedness))
+                    if GUARDAR_IMAGENES:
+                        exito, jpeg = cv2.imencode('.jpg', limpio, [cv2.IMWRITE_JPEG_QUALITY, CALIDAD_JPEG])
+                        if exito:
+                            imagenes.append(jpeg.tobytes())
                     ultimo_capturado = ahora
 
             self._dibujar_overlay(frame, class_label, len(vectores), objetivo, mano_detectada)
@@ -400,9 +430,8 @@ class DataCollectionWidget(QWidget):
             tecla = cv2.waitKey(1) & 0xFF
             if tecla == 27:
                 return vectores, 'cancelado'
-            if tecla in (ord('q'), ord('Q')):
-                return vectores, 'ok'
-            if len(vectores) >= objetivo:
+            if tecla in (ord('q'), ord('Q')) or len(vectores) >= objetivo:
+                self._guardar_imagenes(class_label, imagenes)
                 return vectores, 'ok'
 
     def _dibujar_overlay(self, frame, class_label, capturadas, objetivo, mano_detectada):
