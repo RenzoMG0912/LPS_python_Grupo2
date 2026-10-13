@@ -23,7 +23,7 @@ desktop.ini
 
 Mis_Datos/*
 !Mis_Datos/.gitkeep
-Videos/
+Videos_capturados/
 Imagenes_capturadas/
 *.mp4
 *.avi
@@ -34,3 +34,6 @@ Imagenes_capturadas/
 !icons/**
 !images/**
 !template.jpg
+
+Landmarks_extraidos/
+dataset_dinamico.pickle

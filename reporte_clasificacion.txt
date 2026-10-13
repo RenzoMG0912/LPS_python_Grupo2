@@ -1,24 +1,24 @@
 Mejores parametros: {'C': 10, 'gamma': 0.1, 'kernel': 'rbf'}
 
-Mejor puntaje de validacion cruzada: 0.9123367198838898
+Mejor puntaje de validacion cruzada: 0.9074074074074074
 
-Tiempo de entrenamiento: 3.62 segundos
+Tiempo de entrenamiento: 3.65 segundos
 
-Exactitud de validacion: 0.89
+Exactitud de validacion: 0.94
 
 Matriz de confusion:
-[[66  4  1]
- [10 20  0]
+[[72  3  0]
+ [ 5 25  0]
  [ 0  0 30]]
 
 Reporte de clasificacion:
               precision    recall  f1-score   support
 
-           A       0.87      0.93      0.90        71
-           B       0.83      0.67      0.74        30
-           E       0.97      1.00      0.98        30
+           A       0.94      0.96      0.95        75
+           B       0.89      0.83      0.86        30
+           E       1.00      1.00      1.00        30
 
-    accuracy                           0.89       131
-   macro avg       0.89      0.87      0.87       131
-weighted avg       0.88      0.89      0.88       131
+    accuracy                           0.94       135
+   macro avg       0.94      0.93      0.94       135
+weighted avg       0.94      0.94      0.94       135
 
