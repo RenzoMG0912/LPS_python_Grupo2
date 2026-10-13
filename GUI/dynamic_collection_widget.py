@@ -38,8 +38,9 @@ class DynamicCollectionWidget(QWidget):
     MediaPipe -> se guarda si cumple los minimos de deteccion; si no, se descarta y se repite.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, embebido=False):
         super().__init__(parent)
+        self.embebido = embebido   # dentro de una pestana no hay que ocultar los controles al crearla
         self.init_ui()
 
     # ------------------------------------------------------------------ interfaz
@@ -125,7 +126,8 @@ class DynamicCollectionWidget(QWidget):
         self.combo_clase.currentIndexChanged.connect(self._actualizar_info)
         self.entry_persona.textChanged.connect(self._actualizar_info)
         self._actualizar_info()
-        self.hide_elements()
+        if not self.embebido:
+            self.hide_elements()
 
     def _elementos(self):
         return [self.label_clase, self.combo_clase, self.label_info, self.label_rep, self.entry_rep,

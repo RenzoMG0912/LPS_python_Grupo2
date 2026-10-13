@@ -1,0 +1,44 @@
+import os
+import sys
+
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QTabWidget, QVBoxLayout, QWidget
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from dynamic_collection_widget import DynamicCollectionWidget
+from dynamic_training_widget import DynamicTrainingWidget
+
+
+class DynamicHubWidget(QWidget):
+    """Pantalla "Senas con Movimiento": agrupa la captura y el entrenamiento en pestanas.
+
+    Sigue el mismo contrato que las demas pantallas de Main.py (show_elements / hide_elements).
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        capa = QVBoxLayout(self)
+        capa.setContentsMargins(0, 0, 0, 0)
+
+        self.tabs = QTabWidget(self)
+        self.tabs.setFont(QFont("Arial", 11, QFont.Bold))
+        self.captura = DynamicCollectionWidget(self, embebido=True)
+        self.entrenamiento = DynamicTrainingWidget(self)
+        self.tabs.addTab(self.captura, 'Captura')
+        self.tabs.addTab(self.entrenamiento, 'Entrenamiento')
+        self.tabs.currentChanged.connect(self._actualizar)
+        capa.addWidget(self.tabs)
+
+        self.hide_elements()
+
+    def _actualizar(self, *_):
+        """Al entrar o cambiar de pestana se refrescan los conteos (los videos pueden haber cambiado)."""
+        self.captura._actualizar_info()
+        self.entrenamiento.actualizar_info()
+
+    def hide_elements(self):
+        self.tabs.hide()
+
+    def show_elements(self):
+        self.tabs.show()
+        self._actualizar()

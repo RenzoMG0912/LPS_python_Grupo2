@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (QApplication, QDesktopWidget, QFrame, QGridLayout,
                               QPushButton, QStackedWidget, QVBoxLayout, QWidget)
 
 from data_collection_widget import DataCollectionWidget
-from dynamic_collection_widget import DynamicCollectionWidget
+from dynamic_hub_widget import DynamicHubWidget
 from training_widget import TrainingWidget
 from testing_widget import TestingWidget
 
@@ -127,13 +127,13 @@ class GTOS(QWidget):
         self.button1.clicked.connect(self.show_data_collection)
         row_buttons_layout.addWidget(self.button1)
 
-        self.button5 = QPushButton('Recoleccion Dinamica', self)
+        self.button5 = QPushButton('Señas con Movimiento', self)
         self.button5.setIcon(QIcon('images/Data_Collection.png'))
         self.button5.setIconSize(QSize(80, 60))
         self.button5.setFont(QFont("Arial", 12, QFont.Bold))
         self.button5.setCursor(Qt.PointingHandCursor)
         self.button5.setStyleSheet("QPushButton { border: 3px solid darkblue; border-radius: 10px; background-color: lightblue; color: black; } QPushButton:hover { border: 3px solid darkorange; background-color: #CCCCCC; color: black; }")
-        self.button5.clicked.connect(self.show_dynamic_collection)
+        self.button5.clicked.connect(self.show_dynamic)
         row_buttons_layout.addWidget(self.button5)
 
         self.button3 = QPushButton('Entrenamiento', self)
@@ -161,8 +161,8 @@ class GTOS(QWidget):
         self.data_collection_widget = DataCollectionWidget(self)
         self.stacked_widget.addWidget(self.data_collection_widget)
 
-        self.dynamic_collection_widget = DynamicCollectionWidget(self)
-        self.stacked_widget.addWidget(self.dynamic_collection_widget)
+        self.dynamic_widget = DynamicHubWidget(self)
+        self.stacked_widget.addWidget(self.dynamic_widget)
 
         self.training_widget = TrainingWidget(self)
         self.stacked_widget.addWidget(self.training_widget)
@@ -198,7 +198,7 @@ class GTOS(QWidget):
     def back(self):
         self.parentWidget().setCurrentIndex(0)
         self.data_collection_widget.hide_elements()
-        self.dynamic_collection_widget.hide_elements()
+        self.dynamic_widget.hide_elements()
         self.training_widget.hide_elements()
         self.testing_widget.hide_elements()
 
@@ -210,13 +210,13 @@ class GTOS(QWidget):
     def show_data_collection(self):
         self.stacked_widget.setCurrentWidget(self.data_collection_widget)
         self.data_collection_widget.show_elements()
-        self.dynamic_collection_widget.hide_elements()
+        self.dynamic_widget.hide_elements()
         self.training_widget.hide_elements()
         self.testing_widget.hide_elements()
 
-    def show_dynamic_collection(self):
-        self.stacked_widget.setCurrentWidget(self.dynamic_collection_widget)
-        self.dynamic_collection_widget.show_elements()
+    def show_dynamic(self):
+        self.stacked_widget.setCurrentWidget(self.dynamic_widget)
+        self.dynamic_widget.show_elements()
         self.data_collection_widget.hide_elements()
         self.training_widget.hide_elements()
         self.testing_widget.hide_elements()
@@ -225,14 +225,14 @@ class GTOS(QWidget):
         self.stacked_widget.setCurrentWidget(self.training_widget)
         self.training_widget.show_elements()
         self.data_collection_widget.hide_elements()
-        self.dynamic_collection_widget.hide_elements()
+        self.dynamic_widget.hide_elements()
         self.testing_widget.hide_elements()
 
     def show_test_model(self):
         self.stacked_widget.setCurrentWidget(self.testing_widget)
         self.testing_widget.show_elements()
         self.data_collection_widget.hide_elements()
-        self.dynamic_collection_widget.hide_elements()
+        self.dynamic_widget.hide_elements()
         self.training_widget.hide_elements()
 
 
