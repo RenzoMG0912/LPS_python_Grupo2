@@ -1,0 +1,9 @@
+Muestras por clase: J 10, Ñ 10
+
+AVISO: hay una sola persona, asi que la validacion usa pliegues y la exactitud sale optimista.
+Para una medida real, graba con otra persona y entrena de nuevo.
+
+SVM sobre el vector fijo (RBF): 100.0%  <- elegido
+   por pliegue: pliegue 1 100%, pliegue 2 100%, pliegue 3 100%, pliegue 4 100%, pliegue 5 100%
+SVM con kernel DTW: 100.0%
+   por pliegue: pliegue 1 100%, pliegue 2 100%, pliegue 3 100%, pliegue 4 100%, pliegue 5 100%

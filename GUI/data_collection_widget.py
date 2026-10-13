@@ -37,7 +37,7 @@ CUENTA_REGRESIVA = 3  # segundos de cuenta regresiva tras pulsar ESPACIO (0 = si
 IMAGES_DIR = os.path.join(ROOT_DIR, 'Imagenes_capturadas')
 GUARDAR_IMAGENES = True  # guarda tambien el frame de cada vector en Imagenes_capturadas/<clase>/
 CALIDAD_JPEG = 95        # 0-100; mas alto = mejor calidad y mas peso por imagen
-ID_PERSONA = 'p01'       # cambialo segun quien captura: va en el nombre de cada imagen
+ID_PERSONA = 'p02'       # cambialo segun quien captura: va en el nombre de cada imagen
 
 
 class DataCollectionWidget(QWidget):
