@@ -1,4 +1,4 @@
-Muestras por clase: J 10, Ñ 10
+Muestras por clase: J 10, Z 10, Ñ 10
 
 AVISO: hay una sola persona, asi que la validacion usa pliegues y la exactitud sale optimista.
 Para una medida real, graba con otra persona y entrena de nuevo.

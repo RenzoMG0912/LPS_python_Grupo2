@@ -1,12 +1,11 @@
 import os
 import subprocess
 import sys
-import textwrap
-import time
 import warnings
 
 import cv2
 import mediapipe as mp
+import numpy as np
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
@@ -15,6 +14,7 @@ from PyQt5.QtWidgets import (QComboBox, QFrame, QHBoxLayout, QLabel, QLineEdit,
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import lsp_dynamic as dyn
+from dynamic_camera import PantallasCamara
 
 warnings.filterwarnings("ignore", category=UserWarning, module='google.protobuf')
 warnings.filterwarnings("ignore", category=DeprecationWarning, module='mediapipe')
@@ -22,16 +22,12 @@ warnings.filterwarnings("ignore", message="Feedback manager requires a model wit
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIDEOS_DIR = os.path.join(ROOT_DIR, 'Videos_capturados')
-VENTANA = 'Capturar Senas con Movimiento'
-
-ESC, ESPACIO = 27, 32
-AMARILLO, BLANCO, VERDE, ROJO, NARANJA = (0, 255, 255), (255, 255, 255), (0, 255, 0), (0, 0, 255), (0, 165, 255)
 
 ESTILO_BOTON = ("QPushButton { border: 3px solid black; border-radius: 10px; background-color: orange; "
                 "color: black; } QPushButton:hover { background-color: #CCCCCC; color: black; }")
 
 
-class DynamicCollectionWidget(QWidget):
+class DynamicCollectionWidget(PantallasCamara, QWidget):
     """Graba senas con movimiento: un video corto por repeticion, con control de calidad.
 
     Flujo de cada muestra: espera (ESPACIO) -> cuenta regresiva -> grabacion -> analisis con
@@ -188,22 +184,20 @@ class DynamicCollectionWidget(QWidget):
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, dyn.RESOLUCION_CAMARA[0])
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, dyn.RESOLUCION_CAMARA[1])
 
-        # `pose` solo guia el encuadre mientras esperas; `holistic` revisa la calidad despues de grabar.
+        # `pose` solo guia el encuadre mientras esperas. La calidad se revisa despues de grabar con un
+        # Holistic nuevo por muestra (ver dynamic_camera.py).
         # model_complexity=1 a proposito: el modelo de complejidad 0 NO viene dentro del paquete de
         # MediaPipe y se descarga de internet la primera vez (fallaria sin conexion).
         pose = mp.solutions.pose.Pose(model_complexity=1, min_detection_confidence=0.5,
                                       min_tracking_confidence=0.5)
-        holistic = mp.solutions.holistic.Holistic(static_image_mode=False, model_complexity=1,
-                                                  min_detection_confidence=0.5, min_tracking_confidence=0.5)
         self.label_estado.setText('Camara abierta. Sigue las instrucciones de la ventana de video.')
         self.label_estado.repaint()
         try:
-            estado, guardadas = self._sesion(cap, clase, persona, objetivo, pose, holistic)
+            estado, guardadas = self._sesion(cap, clase, persona, objetivo, pose)
         finally:
             cap.release()
             cv2.destroyAllWindows()
             pose.close()
-            holistic.close()
 
         self._mostrar_resultado(clase, persona, estado, guardadas)
         self._actualizar_info()
@@ -221,7 +215,7 @@ class DynamicCollectionWidget(QWidget):
             texto = f'Listo: {n} muestras de {clase.etiqueta} guardadas ({persona}).'
         self.label_estado.setText(texto)
 
-    def _sesion(self, cap, clase, persona, objetivo, pose, holistic):
+    def _sesion(self, cap, clase, persona, objetivo, pose):
         """Graba repeticiones hasta llegar a `objetivo`. Devuelve (estado, rutas_guardadas).
 
         estado: 'completo', 'cancelado' (ESC), 'error' (camara) o 'error_guardado' (disco).
@@ -252,7 +246,7 @@ class DynamicCollectionWidget(QWidget):
                 aviso = f'DESCARTADA: la camara entrego solo {len(frames)} frames; va demasiado lenta'
                 continue
 
-            resumen = self._analizar(frames, holistic)
+            resumen = self._analizar(frames)
             aceptada, motivo, estadisticas = dyn.evaluar_calidad(resumen, clase.manos == 2)
             if not aceptada:
                 aviso = 'DESCARTADA: ' + motivo
@@ -269,150 +263,24 @@ class DynamicCollectionWidget(QWidget):
             aviso = f'Guardada {len(guardadas)}/{objetivo}'
         return 'completo', guardadas
 
-    # ------------------------------------------------------------------ pantallas
-    def _leer_tecla(self):
-        return cv2.waitKey(1) & 0xFF
-
-    def _leer_frame(self, cap):
-        ok, frame = cap.read()
-        if not ok or frame is None:
-            return None
-        alto, ancho = frame.shape[:2]
-        if ancho > dyn.ANCHO_MAX:
-            frame = cv2.resize(frame, (dyn.ANCHO_MAX, int(round(alto * dyn.ANCHO_MAX / ancho))),
-                               interpolation=cv2.INTER_AREA)
-        return frame
-
-    @staticmethod
-    def _banda(frame, alto):
-        cv2.rectangle(frame, (0, 0), (frame.shape[1], alto), (0, 0, 0), -1)
-
-    @staticmethod
-    def _texto(frame, texto, posicion, escala, color, grosor=2):
-        cv2.putText(frame, texto, posicion, cv2.FONT_HERSHEY_SIMPLEX, escala, color, grosor, cv2.LINE_AA)
-
-    def _dibujar_aviso(self, frame, aviso):
-        """Mensaje del resultado de la ultima muestra, en la parte baja (partido en lineas)."""
-        if not aviso:
-            return
-        color = ROJO if aviso.startswith(('DESCARTADA', 'No hay')) else VERDE
-        lineas = textwrap.wrap(aviso, 62)
-        y = frame.shape[0] - 14 - 28 * (len(lineas) - 1)
-        for linea in lineas:
-            self._texto(frame, linea, (14, y), 0.7, color)
-            y += 28
-
-    def _evaluar_encuadre(self, frame, pose):
-        """Guia simple: se ven los dos hombros y ocupan un ancho razonable de la imagen."""
-        resultado = pose.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        if resultado.pose_landmarks is None:
-            return False, 'No se detecta el cuerpo'
-        izq, der = resultado.pose_landmarks.landmark[11], resultado.pose_landmarks.landmark[12]
-        dentro = all(0.0 <= p.x <= 1.0 and 0.0 <= p.y <= 1.0 for p in (izq, der))
-        if min(izq.visibility, der.visibility) < 0.5 or not dentro:
-            return False, 'No se ven los dos hombros: ajusta el encuadre'
-        ancho = abs(izq.x - der.x)
-        if ancho > dyn.ANCHO_HOMBROS_MAX:
-            return False, 'Muy cerca: aleja la camara'
-        if ancho < dyn.ANCHO_HOMBROS_MIN:
-            return False, 'Muy lejos: acercate'
-        return True, 'Encuadre OK'
-
+    # ------------------------------------------------------------------ pantallas (ver dynamic_camera.py)
     def _esperar(self, cap, clase, persona, hechas, objetivo, aviso, pose):
-        """Vista previa sin grabar. Devuelve 'listo' (ESPACIO), 'borrar' (B), 'cancelado' (ESC) o 'error'."""
+        """'listo' (ESPACIO), 'borrar' (B), 'cancelado' (ESC) o 'error'."""
         titulo = f'{dyn.nombre_en_pantalla(clase)}   {hechas + 1}/{objetivo}   [{persona}]'
-        while True:
-            frame = self._leer_frame(cap)
-            if frame is None:
-                return 'error'
-            encuadre_ok, texto_encuadre = self._evaluar_encuadre(frame, pose)
-
-            self._banda(frame, 150 if clase.nota else 120)
-            self._texto(frame, titulo, (14, 36), 1.0, AMARILLO, 2)
-            self._texto(frame, 'ESPACIO = grabar    B = borrar la ultima    ESC = terminar', (14, 70), 0.62, BLANCO)
-            self._texto(frame, texto_encuadre, (14, 102), 0.7, VERDE if encuadre_ok else NARANJA)
-            if clase.nota:
-                self._texto(frame, clase.nota, (14, 136), 0.58, AMARILLO, 1)
-            self._dibujar_aviso(frame, aviso)
-            cv2.imshow(VENTANA, frame)
-
-            tecla = self._leer_tecla()
-            if tecla == ESC:
-                return 'cancelado'
-            if tecla == ESPACIO:
-                return 'listo'
-            if tecla in (ord('b'), ord('B')):
-                return 'borrar'
+        return self._pantalla_espera(cap, titulo, 'ESPACIO = grabar    B = borrar la ultima    ESC = terminar',
+                                     clase.nota, aviso, pose, permitir_borrar=True)
 
     def _cuenta_regresiva(self, cap, clase):
-        """Cuenta antes de grabar, para que puedas dejar el teclado y ponerte en posicion. No graba."""
-        if dyn.CUENTA_REGRESIVA <= 0:
-            return 'ok'
-        fin = time.time() + dyn.CUENTA_REGRESIVA
-        while True:
-            restante = fin - time.time()
-            if restante <= 0:
-                return 'ok'
-            frame = self._leer_frame(cap)
-            if frame is None:
-                return 'error'
-            alto, ancho = frame.shape[:2]
-            self._banda(frame, 80)
-            self._texto(frame, dyn.nombre_en_pantalla(clase), (14, 36), 1.0, AMARILLO, 2)
-            self._texto(frame, 'Manos en reposo. Haz la sena cuando aparezca REC.    ESC = cancelar',
-                        (14, 66), 0.6, BLANCO)
-            numero = str(int(restante) + 1)
-            (w, h), _ = cv2.getTextSize(numero, cv2.FONT_HERSHEY_SIMPLEX, 8, 16)
-            self._texto(frame, numero, ((ancho - w) // 2, (alto + h) // 2), 8, AMARILLO, 16)
-            cv2.imshow(VENTANA, frame)
-            if self._leer_tecla() == ESC:
-                return 'cancelado'
+        return self._pantalla_cuenta(cap, dyn.nombre_en_pantalla(clase),
+                                     'Manos en reposo. Haz la sena cuando aparezca REC.    ESC = cancelar')
 
     def _grabar(self, cap, clase):
-        """Graba DURACION_GRABACION segundos. Se guardan los frames SIN dibujos encima.
+        return self._pantalla_grabacion(cap, f'REC  {dyn.nombre_en_pantalla(clase)}')
 
-        Devuelve (frames, hora_de_cada_frame, estado). No se procesa con MediaPipe mientras se graba:
-        hacerlo ralentiza la camara y el video saldria con menos cuadros por segundo.
-        """
-        frames, tiempos = [], []
-        inicio = time.time()
-        while True:
-            frame = self._leer_frame(cap)
-            if frame is None:
-                return None, None, 'error'
-            ahora = time.time()
-            frames.append(frame)
-            tiempos.append(ahora)
-            transcurrido = ahora - inicio
-
-            vista = frame.copy()
-            ancho = vista.shape[1]
-            self._banda(vista, 60)
-            cv2.circle(vista, (30, 30), 12, ROJO, -1)
-            self._texto(vista, f'REC  {dyn.nombre_en_pantalla(clase)}', (54, 40), 0.9, BLANCO, 2)
-            avance = min(1.0, transcurrido / dyn.DURACION_GRABACION)
-            cv2.rectangle(vista, (0, 52), (int(ancho * avance), 60), ROJO, -1)
-            cv2.imshow(VENTANA, vista)
-
-            if self._leer_tecla() == ESC:
-                return None, None, 'cancelado'
-            if transcurrido >= dyn.DURACION_GRABACION:
-                return frames, tiempos, 'ok'
-
-    def _analizar(self, frames, holistic):
+    def _analizar(self, frames):
         """Revisa con MediaPipe Holistic que se vean los hombros y las manos. Un dict por frame."""
-        resumen = []
-        total = len(frames)
-        for i, frame in enumerate(frames):
-            r = holistic.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            resumen.append({
-                'pose': r.pose_landmarks is not None,
-                'manos': int(r.left_hand_landmarks is not None) + int(r.right_hand_landmarks is not None),
-            })
-            if i % 8 == 0:   # mantiene viva la ventana y muestra el avance
-                vista = frames[-1].copy()
-                self._banda(vista, 60)
-                self._texto(vista, f'Analizando la muestra...  {i + 1}/{total}', (14, 40), 0.9, AMARILLO, 2)
-                cv2.imshow(VENTANA, vista)
-                self._leer_tecla()
-        return resumen
+        raw = self._procesar_frames(frames, 'Analizando la muestra...')
+        pose_ok = ~np.isnan(raw['pose'][:, 0, 0])
+        izq_ok = ~np.isnan(raw['izq'][:, 0, 0])
+        der_ok = ~np.isnan(raw['der'][:, 0, 0])
+        return [{'pose': bool(p), 'manos': int(i) + int(d)} for p, i, d in zip(pose_ok, izq_ok, der_ok)]

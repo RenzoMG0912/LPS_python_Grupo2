@@ -39,6 +39,38 @@ def _mano(landmarks):
     return np.array([[p.x, p.y, p.z] for p in landmarks.landmark], np.float32)
 
 
+def landmarks_de_frames(frames, holistic, al_avanzar=None):
+    """Pasa una secuencia de imagenes BGR por un `holistic` ya creado.
+
+    Lo usan la extraccion de videos y la prueba en vivo, asi los dos producen exactamente lo mismo.
+    Devuelve un dict con pose (T,33,4), izq y der (T,21,3) (NaN donde no hubo deteccion), ancho, alto.
+    `al_avanzar(i)` se llama despues de cada frame (para mostrar el avance). None si no hubo frames.
+    """
+    pose, izq, der, ancho, alto = [], [], [], 0, 0
+    for i, frame in enumerate(frames):
+        alto, ancho = frame.shape[:2]
+        r = holistic.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        if r.pose_landmarks:
+            pose.append(np.array([[p.x, p.y, p.z, p.visibility] for p in r.pose_landmarks.landmark], np.float32))
+        else:
+            pose.append(np.full((33, 4), np.nan, np.float32))
+        izq.append(_mano(r.left_hand_landmarks))
+        der.append(_mano(r.right_hand_landmarks))
+        if al_avanzar is not None:
+            al_avanzar(i)
+    if not pose:
+        return None
+    return {'pose': np.array(pose), 'izq': np.array(izq), 'der': np.array(der), 'ancho': ancho, 'alto': alto}
+
+
+def _frames_del_video(cap):
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            return
+        yield frame
+
+
 def extraer_landmarks(ruta_video):
     """Pasa un video por MediaPipe Holistic. Devuelve dict con pose (T,33,4), izq y der (T,21,3), ancho, alto, fps."""
     import mediapipe as mp   # se importa aqui para que el resto del modulo se pueda usar sin MediaPipe
@@ -47,26 +79,14 @@ def extraer_landmarks(ruta_video):
     if not cap.isOpened():
         return None
     fps = cap.get(cv2.CAP_PROP_FPS) or 0.0
-    pose, izq, der, ancho, alto = [], [], [], 0, 0
     with mp.solutions.holistic.Holistic(static_image_mode=False, model_complexity=1,
                                         min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
-        while True:
-            ok, frame = cap.read()
-            if not ok:
-                break
-            alto, ancho = frame.shape[:2]
-            r = holistic.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            if r.pose_landmarks:
-                pose.append(np.array([[p.x, p.y, p.z, p.visibility] for p in r.pose_landmarks.landmark], np.float32))
-            else:
-                pose.append(np.full((33, 4), np.nan, np.float32))
-            izq.append(_mano(r.left_hand_landmarks))
-            der.append(_mano(r.right_hand_landmarks))
+        raw = landmarks_de_frames(_frames_del_video(cap), holistic)
     cap.release()
-    if not pose:
+    if raw is None:
         return None
-    return {'pose': np.array(pose), 'izq': np.array(izq), 'der': np.array(der),
-            'ancho': ancho, 'alto': alto, 'fps': fps}
+    raw['fps'] = fps
+    return raw
 
 
 def cargar_o_extraer(ruta_video, ruta_cache, forzar):

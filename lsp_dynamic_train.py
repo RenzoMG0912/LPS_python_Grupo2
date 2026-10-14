@@ -34,6 +34,7 @@ MIN_MUESTRAS_CLASE = 3       # una clase con menos muestras se deja fuera del en
 GRID_C = (1.0, 10.0, 100.0)
 GRID_GAMMA_RBF = (0.3, 1.0, 3.0)   # multiplos del gamma "natural" (1 / numero de caracteristicas)
 GRID_GAMMA_DTW = (1.0, 2.0, 4.0)   # kernel = exp(-g * distancia / distancia_mediana)
+FACTOR_RECHAZO = 1.25              # una sena se rechaza si su distancia DTW supera este factor x el percentil 95 de los aciertos validados
 
 RUTA_DATASET = os.path.join(ROOT_DIR, 'dataset_dinamico.pickle')
 RUTA_MODELO = os.path.join(ROOT_DIR, 'svm_dinamico_lsp_classifier.p')
@@ -196,16 +197,14 @@ def evaluar(X, S, y, personas, tipos=('rbf', 'dtw'), progreso=print):
     clases = sorted(set(y))
     progreso(f'Validacion: {"dejando una persona fuera" if estrategia == "persona" else "pliegues (una sola persona)"} '
              f'- {len(partes)} repeticiones.')
-    D = None
-    if 'dtw' in tipos:
-        progreso('Calculando las distancias DTW entre todas las muestras...')
-        t0 = time.time()
-        D = dtw_distancias(S, S, simetrica=True)
-        progreso(f'  listo en {time.time() - t0:.1f} s')
+    progreso('Calculando las distancias DTW entre todas las muestras...')
+    t0 = time.time()
+    D = dtw_distancias(S, S, simetrica=True)      # tambien se usan para decidir cuando rechazar una sena desconocida
+    progreso(f'  listo en {time.time() - t0:.1f} s')
 
     resultados = {}
     for tipo in tipos:
-        verdad, prediccion, por_grupo, omitidas = [], [], {}, 0
+        verdad, prediccion, por_grupo, omitidas, dist_correctas = [], [], {}, 0, []
         for nombre, tr, te in partes:
             conocidas = np.isin(y[te], y[tr])          # una clase que no estaba en el entrenamiento no se puede acertar
             omitidas += int((~conocidas).sum())
@@ -218,6 +217,8 @@ def evaluar(X, S, y, personas, tipos=('rbf', 'dtw'), progreso=print):
             else:
                 m = ajustar_dtw(D[np.ix_(tr, tr)], y[tr])
                 pred = m['svc'].predict(np.exp(-m['g'] * D[np.ix_(te, tr)] / m['escala']))
+            dmin = D[np.ix_(te, tr)].min(axis=1)            # distancia DTW de cada muestra de prueba a la mas parecida del entrenamiento
+            dist_correctas += list(dmin[np.array(pred) == y[te]])
             verdad += list(y[te])
             prediccion += list(pred)
             por_grupo[nombre] = float(np.mean(np.array(pred) == y[te]))
@@ -226,35 +227,57 @@ def evaluar(X, S, y, personas, tipos=('rbf', 'dtw'), progreso=print):
         from sklearn.metrics import confusion_matrix
         resultados[tipo] = {'exactitud': float(np.mean(verdad == prediccion)), 'por_grupo': por_grupo,
                             'matriz': confusion_matrix(verdad, prediccion, labels=clases),
-                            'verdad': verdad, 'prediccion': prediccion, 'omitidas': omitidas}
+                            'verdad': verdad, 'prediccion': prediccion, 'omitidas': omitidas,
+                            'dist_correctas': np.array(dist_correctas)}
     return {'estrategia': estrategia, 'clases': clases, 'resultados': resultados, 'D': D}
 
 
-def entrenar_final(X, S, y, tipo, D=None):
+def calcular_umbral(D, dist_correctas=None):
+    """Distancia DTW maxima (a la muestra de entrenamiento mas parecida) para aceptar una sena.
+
+    Se calibra con las muestras que la validacion acerto: asi refleja la distancia a la que suelen
+    quedar las senas buenas de una persona que el modelo no vio. Si hay pocas, se usa un respaldo
+    basado en las distancias entre las propias muestras de entrenamiento.
+    """
+    if dist_correctas is not None and len(dist_correctas) >= 10:
+        return FACTOR_RECHAZO * float(np.percentile(dist_correctas, 95))
+    d = D.copy()
+    np.fill_diagonal(d, np.inf)
+    return 2.0 * float(np.median(d.min(axis=1)))
+
+
+def entrenar_final(X, S, y, tipo, D=None, dist_correctas=None):
     """Entrena el modelo definitivo con TODAS las muestras."""
-    if tipo == 'rbf':
-        m = ajustar_rbf(X, y)
-        return {'tipo': 'rbf', 'escalador': m['escalador'], 'svc': m['svc'], 'C': m['C'], 'gamma': m['gamma']}
     if D is None:
         D = dtw_distancias(S, S, simetrica=True)
+    comunes = {'secuencias_train': S.astype(np.float32), 'umbral_rechazo': calcular_umbral(D, dist_correctas)}
+    if tipo == 'rbf':
+        m = ajustar_rbf(X, y)
+        return {'tipo': 'rbf', 'escalador': m['escalador'], 'svc': m['svc'], 'C': m['C'], 'gamma': m['gamma'], **comunes}
     m = ajustar_dtw(D, y)
-    return {'tipo': 'dtw', 'svc': m['svc'], 'C': m['C'], 'g': m['g'], 'escala': m['escala'],
-            'secuencias_train': S.astype(np.float32)}
+    return {'tipo': 'dtw', 'svc': m['svc'], 'C': m['C'], 'g': m['g'], 'escala': m['escala'], **comunes}
 
 
 def predecir(modelo, vector, secuencia):
     """Clasifica UNA muestra. `vector` y `secuencia` son los que devuelve feat.extraer_caracteristicas.
 
-    Devuelve (clase, detalle). Para el modelo DTW, detalle['dist_min'] es la distancia DTW a la muestra
-    de entrenamiento mas parecida (sirve para rechazar senas que no son de ninguna clase).
+    Devuelve (clase, detalle). detalle['dist_min'] es la distancia DTW a la muestra de entrenamiento
+    mas parecida y detalle['rechazada'] es True si supera el umbral: la sena no se parece lo bastante a
+    ninguna de las que se grabaron, asi que lo mas honesto es decir "no reconocida".
     """
+    s = feat.remuestrear(np.asarray(secuencia, dtype=np.float64), modelo['longitud_dtw'])[None]
+    d = None
+    if modelo.get('secuencias_train') is not None:
+        d = dtw_distancias(s, modelo['secuencias_train'].astype(np.float64))
     if modelo['tipo'] == 'rbf':
         x = modelo['escalador'].transform(np.asarray(vector, dtype=np.float64)[None])
-        return str(modelo['svc'].predict(x)[0]), {'dist_min': None}
-    s = feat.remuestrear(np.asarray(secuencia, dtype=np.float64), modelo['longitud_dtw'])[None]
-    d = dtw_distancias(s, modelo['secuencias_train'].astype(np.float64))
-    clase = modelo['svc'].predict(np.exp(-modelo['g'] * d / modelo['escala']))[0]
-    return str(clase), {'dist_min': float(d.min())}
+        clase = modelo['svc'].predict(x)[0]
+    else:
+        clase = modelo['svc'].predict(np.exp(-modelo['g'] * d / modelo['escala']))[0]
+    dist_min = None if d is None else float(d.min())
+    umbral = modelo.get('umbral_rechazo')
+    return str(clase), {'dist_min': dist_min, 'umbral': umbral,
+                        'rechazada': bool(dist_min is not None and umbral is not None and dist_min > umbral)}
 
 
 def guardar_modelo(modelo, ruta=RUTA_MODELO):
@@ -344,7 +367,7 @@ def entrenar(ruta_dataset=RUTA_DATASET, ruta_modelo=RUTA_MODELO, preferencia='au
     elegido = max(ev['resultados'], key=lambda t: (ev['resultados'][t]['exactitud'], t == 'rbf'))
     progreso(f'Modelo elegido: {elegido}. Entrenando con todas las muestras...')
 
-    modelo = entrenar_final(X, S, y, elegido, ev['D'])
+    modelo = entrenar_final(X, S, y, elegido, ev['D'], ev['resultados'][elegido]['dist_correctas'])
     modelo.update({'clases': list(map(str, clases)), 'formato': feat.parametros(), 'longitud_dtw': LONGITUD_DTW,
                    'creado': time.strftime('%Y-%m-%d %H:%M:%S'), 'personas': sorted(set(map(str, personas))),
                    'exactitud_validacion': ev['resultados'][elegido]['exactitud'], 'estrategia': ev['estrategia']})

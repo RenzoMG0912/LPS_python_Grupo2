@@ -1,7 +1,8 @@
-Videos revisados: 20 | aceptados: 20 | rechazados: 0 | tiempo: 43 s
+Videos revisados: 30 | aceptados: 30 | rechazados: 0 | tiempo: 0 s
 
 Por clase:
   J            10 muestras | personas: Araujo
+  Z            10 muestras | personas: Araujo
   Ñ            10 muestras | personas: Araujo
 
 Sena posiblemente cortada (la mano seguia moviendose cuando termino o empezo el video):
@@ -16,3 +17,11 @@ Sena posiblemente cortada (la mano seguia moviendose cuando termino o empezo el 
   LETRA_ENIE\Araujo_20261013_162308.mp4  [Ñ]  al final
   LETRA_ENIE\Araujo_20261013_162318.mp4  [Ñ]  al final
   LETRA_J\Araujo_20261012_162833.mp4  [J]  al final
+  LETRA_Z\Araujo_20261013_185924.mp4  [Z]  al final
+  LETRA_Z\Araujo_20261013_185934.mp4  [Z]  al final
+  LETRA_Z\Araujo_20261013_185956.mp4  [Z]  al final
+  LETRA_Z\Araujo_20261013_190007.mp4  [Z]  al final
+  LETRA_Z\Araujo_20261013_190018.mp4  [Z]  al final
+  LETRA_Z\Araujo_20261013_190039.mp4  [Z]  al inicio
+  LETRA_Z\Araujo_20261013_190050.mp4  [Z]  al final
+  LETRA_Z\Araujo_20261013_190101.mp4  [Z]  al final

@@ -1,3 +1,12 @@
+"""Definiciones y utilidades de la captura de senas con movimiento (dinamicas).
+
+Lo usa GUI/dynamic_collection_widget.py. No depende de PyQt, asi que las reglas de
+calidad y el guardado se pueden probar por separado.
+
+Cada muestra se guarda como un VIDEO corto (mp4) mas un archivo .json con sus datos.
+Los puntos de las manos y el cuerpo NO se calculan aqui: se extraen despues con un
+script aparte, de modo que si cambia alguna decision no hace falta volver a grabar.
+"""
 import json
 import os
 import re
@@ -6,23 +15,29 @@ from collections import namedtuple
 
 import cv2
 
-DURACION_GRABACION = 2.5
-CUENTA_REGRESIVA = 3
+# ----- Grabacion -----
+DURACION_GRABACION = 2.5      # segundos que se graba cada muestra
+CUENTA_REGRESIVA = 3          # segundos de cuenta regresiva antes de grabar (0 = sin cuenta)
 REPETICIONES_POR_DEFECTO = 20
-RESOLUCION_CAMARA = (1280, 720)
-ANCHO_MAX = 960
-FPS_MIN, FPS_MAX = 5.0, 60.0
-MIN_FRAMES_GRABADOS = 10
+RESOLUCION_CAMARA = (1280, 720)  # se le pide a la camara; ponla en None para no pedir nada
+ANCHO_MAX = 960               # si la camara entrega mas ancho, el frame se reduce a este ancho
+FPS_MIN, FPS_MAX = 5.0, 60.0  # rango admitido para los cuadros por segundo reales medidos
+MIN_FRAMES_GRABADOS = 10      # menos que esto = la camara va demasiado lenta
 
-MIN_POSE = 0.90
-MIN_FRAMES_MANO = 12
-MIN_FRAMES_DOS_MANOS = 8
+# ----- Control de calidad (se aplica despues de grabar, con MediaPipe Holistic) -----
+MIN_POSE = 0.90               # fraccion minima de frames donde se detectan los hombros
+MIN_FRAMES_MANO = 12          # frames minimos con al menos una mano detectada (~0.4 s)
+MIN_FRAMES_DOS_MANOS = 8      # frames minimos con las dos manos (solo senas de dos manos)
 
+# ----- Guia de encuadre (ancho de hombros como fraccion del ancho de la imagen) -----
+# Medido en los videos del dataset original: ~0.20. Es solo una guia, no bloquea la grabacion.
 ANCHO_HOMBROS_MIN = 0.15
 ANCHO_HOMBROS_MAX = 0.35
 
 ClaseDinamica = namedtuple('ClaseDinamica', 'etiqueta carpeta tipo manos nota')
 
+# `carpeta` es ASCII a proposito: cv2.VideoWriter falla en Windows con rutas con tildes o N con tilde.
+# La etiqueta real (con tilde) queda en el .json de cada muestra.
 CLASES_DINAMICAS = [
     ClaseDinamica('J', 'LETRA_J', 'Letra', 1, ''),
     ClaseDinamica('Ñ', 'LETRA_ENIE', 'Letra', 1, ''),
@@ -42,11 +57,26 @@ CLASES_DINAMICAS = [
     ClaseDinamica('AHÍ', 'PAL_AHI', 'Palabra', 1, ''),
 ]
 
+# cv2.putText no dibuja tildes ni la N con tilde: para el texto sobre el video se usa esto.
 _NOMBRE_EN_PANTALLA = {'Ñ': 'N (con tilde)', 'AHÍ': 'AHI'}
 
 
+def etiqueta_en_pantalla(etiqueta):
+    """Etiqueta sin tildes ni N con tilde, apta para dibujarla con OpenCV."""
+    return _NOMBRE_EN_PANTALLA.get(etiqueta, etiqueta)
+
+
 def nombre_en_pantalla(clase):
-    return _NOMBRE_EN_PANTALLA.get(clase.etiqueta, clase.etiqueta)
+    return etiqueta_en_pantalla(clase.etiqueta)
+
+
+# Como se dice cada etiqueta en voz alta (un lector de voz diria "ge" o "ene tilde" ante "J" o "N").
+_PARA_VOZ = {'J': 'jota', 'Ñ': 'eñe', 'Z': 'zeta', '10': 'diez', 'LO-SIENTO': 'lo siento'}
+
+
+def texto_para_voz(etiqueta):
+    """Texto que se manda al lector de voz: letras por su nombre, palabras en minuscula y sin guiones."""
+    return _PARA_VOZ.get(etiqueta, etiqueta.replace('-', ' ').lower())
 
 
 def limpiar_id(texto):
@@ -70,6 +100,7 @@ def contar_muestras(raiz, clase, persona=None):
 
 def evaluar_calidad(resumen, dos_manos):
     """Decide si una muestra grabada sirve.
+
     `resumen` es una lista con un dict por frame: {'pose': bool, 'manos': 0, 1 o 2}.
     Devuelve (aceptada, motivo, estadisticas). Los motivos van sin tildes porque
     tambien se dibujan sobre el video.
