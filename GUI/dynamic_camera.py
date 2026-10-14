@@ -26,14 +26,8 @@ class PantallasCamara:
         return cv2.waitKey(1) & 0xFF
 
     def _leer_frame(self, cap):
-        ok, frame = cap.read()
-        if not ok or frame is None:
-            return None
-        alto, ancho = frame.shape[:2]
-        if ancho > dyn.ANCHO_MAX:
-            frame = cv2.resize(frame, (dyn.ANCHO_MAX, int(round(alto * dyn.ANCHO_MAX / ancho))),
-                               interpolation=cv2.INTER_AREA)
-        return frame
+        """Un frame de la camara, ya reducido a ANCHO_MAX (lo mismo que hace la prueba en vivo)."""
+        return dyn.leer_frame(cap)
 
     @staticmethod
     def _banda(frame, alto):

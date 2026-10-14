@@ -127,6 +127,22 @@ def evaluar_calidad(resumen, dos_manos):
     return True, 'ok', estadisticas
 
 
+def leer_frame(cap, ancho_max=ANCHO_MAX):
+    """Lee un frame de la camara y lo reduce a `ancho_max` de ancho si viene mas grande.
+
+    Devuelve None si la camara no entrego imagen. Lo usan la captura de videos y la prueba
+    en vivo, para que las dos trabajen con el mismo tamano de imagen.
+    """
+    ok, frame = cap.read()
+    if not ok or frame is None:
+        return None
+    alto, ancho = frame.shape[:2]
+    if ancho_max and ancho > ancho_max:
+        frame = cv2.resize(frame, (ancho_max, int(round(alto * ancho_max / ancho))),
+                           interpolation=cv2.INTER_AREA)
+    return frame
+
+
 def fps_real(tiempos):
     """Cuadros por segundo medidos a partir de la hora de cada frame, dentro de un rango razonable."""
     if len(tiempos) < 2 or tiempos[-1] <= tiempos[0]:

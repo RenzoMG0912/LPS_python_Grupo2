@@ -39,6 +39,24 @@ def _mano(landmarks):
     return np.array([[p.x, p.y, p.z] for p in landmarks.landmark], np.float32)
 
 
+def landmarks_de_un_frame(frame, holistic):
+    """Puntos de UN frame BGR, con un `holistic` ya creado. Es lo que usa el reconocimiento en vivo.
+
+    Devuelve (puntos, resultado): `puntos` con pose (33,4), izq y der (21,3) (NaN donde no
+    hubo deteccion), ancho y alto; `resultado` es lo que devolvio MediaPipe tal cual, que la
+    prueba en vivo usa para dibujar el esqueleto sobre la imagen.
+    """
+    alto, ancho = frame.shape[:2]
+    resultado = holistic.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+    if resultado.pose_landmarks:
+        pose = np.array([[p.x, p.y, p.z, p.visibility] for p in resultado.pose_landmarks.landmark], np.float32)
+    else:
+        pose = np.full((33, 4), np.nan, np.float32)
+    puntos = {'pose': pose, 'izq': _mano(resultado.left_hand_landmarks),
+              'der': _mano(resultado.right_hand_landmarks), 'ancho': ancho, 'alto': alto}
+    return puntos, resultado
+
+
 def landmarks_de_frames(frames, holistic, al_avanzar=None):
     """Pasa una secuencia de imagenes BGR por un `holistic` ya creado.
 
@@ -48,14 +66,11 @@ def landmarks_de_frames(frames, holistic, al_avanzar=None):
     """
     pose, izq, der, ancho, alto = [], [], [], 0, 0
     for i, frame in enumerate(frames):
-        alto, ancho = frame.shape[:2]
-        r = holistic.process(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        if r.pose_landmarks:
-            pose.append(np.array([[p.x, p.y, p.z, p.visibility] for p in r.pose_landmarks.landmark], np.float32))
-        else:
-            pose.append(np.full((33, 4), np.nan, np.float32))
-        izq.append(_mano(r.left_hand_landmarks))
-        der.append(_mano(r.right_hand_landmarks))
+        puntos, _ = landmarks_de_un_frame(frame, holistic)
+        pose.append(puntos['pose'])
+        izq.append(puntos['izq'])
+        der.append(puntos['der'])
+        ancho, alto = puntos['ancho'], puntos['alto']
         if al_avanzar is not None:
             al_avanzar(i)
     if not pose:

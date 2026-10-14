@@ -43,6 +43,15 @@ MAX_FALTANTES = 0.30           # fraccion maxima de frames sin la mano dentro de
 UMBRAL_MANO_SECUNDARIA = 0.5   # recorrido (en anchos de hombro) a partir del cual la otra mano "firma"
 VIS_HOMBROS = 0.5              # visibilidad minima de los hombros para usarlos de referencia
 
+# ----- Estados que devuelve analizar_movimiento -----
+# Los motivos son textos porque salen en el reporte; los estados permiten que la prueba
+# en vivo sepa que paso sin tener que interpretar el texto.
+ESTADO_OK = 'ok'                    # hay un tramo con movimiento y se puede clasificar
+ESTADO_SIN_MOVIMIENTO = 'sin_movimiento'   # la mano esta quieta
+ESTADO_CORTO = 'movimiento_corto'   # se mueve, pero todavia en muy pocos frames
+ESTADO_SIN_DATOS = 'sin_datos'      # no se puede analizar (sin hombros, sin mano, mano perdida...)
+MOTIVO_SIN_MOVIMIENTO = 'no se detecto movimiento de la mano'
+
 
 def parametros():
     """Parametros del formato (se guardan en el dataset para detectar mezclas)."""
@@ -203,17 +212,22 @@ def remuestrear(m, n=LONGITUD):
     return np.stack([np.interp(xn, x, m[:, j]) for j in range(m.shape[1])], axis=1)
 
 
-def extraer_caracteristicas(pose, izq, der, ancho, alto):
-    """Vector de caracteristicas de UNA muestra.
+def analizar_movimiento(pose, izq, der, ancho, alto):
+    """Prepara las manos y localiza el tramo con movimiento de UNA muestra.
 
-    pose (T,33,4), izq y der (T,21,3) con NaN donde MediaPipe no detecto la mano.
-    Devuelve (vector (DIM_VECTOR,), info). Si la muestra no sirve, vector = None e
-    info['motivo'] explica por que (los motivos van sin tildes).
+    Es la primera mitad de extraer_caracteristicas, expuesta aparte para que la prueba en
+    vivo corte la seña con exactamente el mismo criterio que la extraccion de videos.
+
+    Devuelve (datos, info).
+      * datos = None si no hay tramo que clasificar; entonces info['estado'] dice que paso
+        (ESTADO_SIN_MOVIMIENTO, ESTADO_CORTO o ESTADO_SIN_DATOS) e info['motivo'] lo explica.
+      * datos = {'idx', 'manos', 'prim', 'sec', 'dos_manos'} si hay tramo usable; se lo
+        tiene que pasar a vector_de_tramo() para obtener el vector.
     """
-    info = {}
+    info = {'estado': ESTADO_SIN_DATOS}
     ref = referencia_cuerpo(pose, ancho, alto)
     if ref is None:
-        return None, {'motivo': 'no se detectaron los hombros'}
+        return None, {**info, 'motivo': 'no se detectaron los hombros'}
     centro, ancho_h = ref
 
     manos = {}
@@ -227,7 +241,7 @@ def extraer_caracteristicas(pose, izq, der, ancho, alto):
     prim = max(manos, key=lambda k: (manos[k]['rec'], manos[k]['pres'].sum()))
     sec = 'der' if prim == 'izq' else 'izq'
     if not manos[prim]['pres'].any():
-        return None, {**info, 'motivo': 'no se detecto ninguna mano'}
+        return None, {**info, 'motivo': 'no se detecto ninguna mano', 'estado': ESTADO_SIN_DATOS}
     dos_manos = manos[sec]['rec'] > UMBRAL_MANO_SECUNDARIA
     info.update(lado_principal=prim, dos_manos=bool(dos_manos))
 
@@ -237,7 +251,8 @@ def extraer_caracteristicas(pose, izq, der, ancho, alto):
     huecos = 1.0 - manos[prim]['pres'][vistos[0]:vistos[-1] + 1].mean()
     info['huecos_internos'] = round(float(huecos), 3)
     if huecos > MAX_FALTANTES:
-        return None, {**info, 'motivo': f'la mano se perdio en el {huecos * 100:.0f}% del video'}
+        return None, {**info, 'motivo': f'la mano se perdio en el {huecos * 100:.0f}% del video',
+                      'estado': ESTADO_SIN_DATOS}
 
     a, energia = actividad(manos[prim]['pos'], manos[prim]['forma'], manos[prim]['pres'])
     if dos_manos:
@@ -252,19 +267,40 @@ def extraer_caracteristicas(pose, izq, der, ancho, alto):
     else:
         idx = frames_activos(a)
     if idx is None:
-        return None, {**info, 'motivo': 'no se detecto movimiento de la mano'}
+        return None, {**info, 'motivo': MOTIVO_SIN_MOVIMIENTO, 'estado': ESTADO_SIN_MOVIMIENTO}
     if len(idx) < MIN_FRAMES_BLOQUE:
-        return None, {**info, 'motivo': f'el movimiento dura solo {len(idx)} frames (minimo {MIN_FRAMES_BLOQUE})'}
+        return None, {**info, 'motivo': f'el movimiento dura solo {len(idx)} frames (minimo {MIN_FRAMES_BLOQUE})',
+                      'estado': ESTADO_CORTO}
 
     # El video se acabo (o empezo) con la mano todavia en movimiento: la sena puede estar cortada.
     info['cortada_al_final'] = bool(idx[-1] >= len(a) - 1 and a[-3:].max() >= 1.0)
     info['cortada_al_inicio'] = bool(idx[0] <= 0 and a[:3].max() >= 1.0)
 
     faltan = 1.0 - manos[prim]['pres'][idx].mean()
+    # frames_activos cuenta solo los frames con movimiento de verdad: el bloque trae MARGEN
+    # frames de calma a cada lado, asi que su largo no sirve para saber si hubo una seña ni
+    # cuando termino. primer_activo/ultimo_activo son los frames con movimiento real.
+    con_movimiento = np.flatnonzero(a >= 1.0)
     info.update(bloque=(int(idx[0]), int(idx[-1])), frames_bloque=int(len(idx)),
+                frames_activos=int((a[idx] >= 1.0).sum()),
+                primer_activo=int(con_movimiento[0]), ultimo_activo=int(con_movimiento[-1]),
                 pausas_recortadas=int(idx[-1] - idx[0] + 1 - len(idx)), faltantes=round(float(faltan), 3))
     if faltan > MAX_FALTANTES:
-        return None, {**info, 'motivo': f'la mano se perdio en el {faltan * 100:.0f}% del movimiento'}
+        return None, {**info, 'motivo': f'la mano se perdio en el {faltan * 100:.0f}% del movimiento',
+                      'estado': ESTADO_SIN_DATOS}
+
+    info['estado'] = ESTADO_OK
+    return {'idx': idx, 'manos': manos, 'prim': prim, 'sec': sec, 'dos_manos': dos_manos}, info
+
+
+def vector_de_tramo(datos, info):
+    """Vector de caracteristicas del tramo que devolvio analizar_movimiento.
+
+    Escribe en info['secuencia'] el tramo recortado sin remuestrear (lo usa DTW, que lo
+    remuestrea a su propia longitud) y devuelve el vector fijo que se le da al SVM.
+    """
+    idx, manos = datos['idx'], datos['manos']
+    prim, sec, dos_manos = datos['prim'], datos['sec'], datos['dos_manos']
 
     partes = []
     for k, activa in ((prim, True), (sec, dos_manos)):
@@ -280,4 +316,17 @@ def extraer_caracteristicas(pose, izq, der, ancho, alto):
 
     sin_remuestrear = np.hstack(partes)
     info['secuencia'] = sin_remuestrear.astype(np.float32)
-    return remuestrear(sin_remuestrear).astype(np.float32).ravel(), info
+    return remuestrear(sin_remuestrear).astype(np.float32).ravel()
+
+
+def extraer_caracteristicas(pose, izq, der, ancho, alto):
+    """Vector de caracteristicas de UNA muestra.
+
+    pose (T,33,4), izq y der (T,21,3) con NaN donde MediaPipe no detecto la mano.
+    Devuelve (vector (DIM_VECTOR,), info). Si la muestra no sirve, vector = None e
+    info['motivo'] explica por que (los motivos van sin tildes).
+    """
+    datos, info = analizar_movimiento(pose, izq, der, ancho, alto)
+    if datos is None:
+        return None, info
+    return vector_de_tramo(datos, info), info
