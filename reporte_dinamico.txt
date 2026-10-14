@@ -1,9 +1,12 @@
-Muestras por clase: J 10, Z 10, Ñ 10
+Muestras por clase: AHÍ 10, AMIGO 10, BIEN 10, CHAU 10, DONDE 10, ENTENDER 10, HOLA 10, J 10, LO-SIENTO 10, MALO 10, PREGUNTAR 10, Z 10, Ñ 10
 
 AVISO: hay una sola persona, asi que la validacion usa pliegues y la exactitud sale optimista.
 Para una medida real, graba con otra persona y entrena de nuevo.
 
-SVM sobre el vector fijo (RBF): 100.0%  <- elegido
-   por pliegue: pliegue 1 100%, pliegue 2 100%, pliegue 3 100%, pliegue 4 100%, pliegue 5 100%
-SVM con kernel DTW: 100.0%
+SVM sobre el vector fijo (RBF): 97.7%
+   por pliegue: pliegue 1 96%, pliegue 2 100%, pliegue 3 96%, pliegue 4 96%, pliegue 5 100%
+   confunde BIEN con DONDE: 1 veces
+   confunde CHAU con HOLA: 1 veces
+   confunde Ñ con DONDE: 1 veces
+SVM con kernel DTW: 100.0%  <- elegido
    por pliegue: pliegue 1 100%, pliegue 2 100%, pliegue 3 100%, pliegue 4 100%, pliegue 5 100%

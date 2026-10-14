@@ -1,7 +1,17 @@
-Videos revisados: 30 | aceptados: 30 | rechazados: 0 | tiempo: 0 s
+Videos revisados: 130 | aceptados: 130 | rechazados: 0 | tiempo: 415 s
 
 Por clase:
+  AHÍ          10 muestras | personas: Araujo
+  AMIGO        10 muestras | personas: Araujo
+  BIEN         10 muestras | personas: Araujo
+  CHAU         10 muestras | personas: Araujo
+  DONDE        10 muestras | personas: Araujo
+  ENTENDER     10 muestras | personas: Araujo
+  HOLA         10 muestras | personas: Araujo
   J            10 muestras | personas: Araujo
+  LO-SIENTO    10 muestras | personas: Araujo
+  MALO         10 muestras | personas: Araujo
+  PREGUNTAR    10 muestras | personas: Araujo
   Z            10 muestras | personas: Araujo
   Ñ            10 muestras | personas: Araujo
 
@@ -25,3 +35,62 @@ Sena posiblemente cortada (la mano seguia moviendose cuando termino o empezo el 
   LETRA_Z\Araujo_20261013_190039.mp4  [Z]  al inicio
   LETRA_Z\Araujo_20261013_190050.mp4  [Z]  al final
   LETRA_Z\Araujo_20261013_190101.mp4  [Z]  al final
+  PAL_AHI\Araujo_20261013_203118.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203158.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203208.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203221.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203231.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203241.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203251.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203301.mp4  [AHÍ]  al final
+  PAL_AHI\Araujo_20261013_203311.mp4  [AHÍ]  al final
+  PAL_AMIGO\Araujo_20261013_202207.mp4  [AMIGO]  al final
+  PAL_AMIGO\Araujo_20261013_202217.mp4  [AMIGO]  al final
+  PAL_AMIGO\Araujo_20261013_202227.mp4  [AMIGO]  al final
+  PAL_AMIGO\Araujo_20261013_202238.mp4  [AMIGO]  al final
+  PAL_AMIGO\Araujo_20261013_202249.mp4  [AMIGO]  al final
+  PAL_AMIGO\Araujo_20261013_202259.mp4  [AMIGO]  al final
+  PAL_AMIGO\Araujo_20261013_202309.mp4  [AMIGO]  al final
+  PAL_AMIGO\Araujo_20261013_202319.mp4  [AMIGO]  al final
+  PAL_CHAU\Araujo_20261013_201212.mp4  [CHAU]  al final
+  PAL_CHAU\Araujo_20261013_201244.mp4  [CHAU]  al final
+  PAL_CHAU\Araujo_20261013_201357.mp4  [CHAU]  al final
+  PAL_DONDE\Araujo_20261013_202848.mp4  [DONDE]  al final
+  PAL_DONDE\Araujo_20261013_202858.mp4  [DONDE]  al final
+  PAL_DONDE\Araujo_20261013_202912.mp4  [DONDE]  al final
+  PAL_DONDE\Araujo_20261013_202922.mp4  [DONDE]  al final
+  PAL_DONDE\Araujo_20261013_202936.mp4  [DONDE]  al final
+  PAL_DONDE\Araujo_20261013_202946.mp4  [DONDE]  al final
+  PAL_DONDE\Araujo_20261013_202956.mp4  [DONDE]  al final
+  PAL_DONDE\Araujo_20261013_203041.mp4  [DONDE]  al final
+  PAL_HOLA\Araujo_20261013_201000.mp4  [HOLA]  al inicio
+  PAL_HOLA\Araujo_20261013_201013.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201024.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201035.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201046.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201057.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201107.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201118.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201128.mp4  [HOLA]  al final
+  PAL_HOLA\Araujo_20261013_201139.mp4  [HOLA]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201452.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201503.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201515.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201525.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201537.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201557.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201607.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201617.mp4  [LO-SIENTO]  al final
+  PAL_LO-SIENTO\Araujo_20261013_201628.mp4  [LO-SIENTO]  al inicio
+  PAL_PREGUNTAR\Araujo_20261013_202649.mp4  [PREGUNTAR]  al final
+  PAL_PREGUNTAR\Araujo_20261013_202710.mp4  [PREGUNTAR]  al final
+  PAL_PREGUNTAR\Araujo_20261013_202730.mp4  [PREGUNTAR]  al final
+  PAL_PREGUNTAR\Araujo_20261013_202741.mp4  [PREGUNTAR]  al inicio
+  PAL_PREGUNTAR\Araujo_20261013_202751.mp4  [PREGUNTAR]  al final
+  PAL_PREGUNTAR\Araujo_20261013_202801.mp4  [PREGUNTAR]  al final
+  PAL_PREGUNTAR\Araujo_20261013_202811.mp4  [PREGUNTAR]  al final
+
+Recorte ambiguo (el tramo elegido casi empata con otro; conviene mirar el video):
+  PAL_BIEN\Araujo_20261013_201840.mp4  [BIEN]
+  PAL_CHAU\Araujo_20261013_201234.mp4  [CHAU]
+  PAL_ENTENDER\Araujo_20261013_202542.mp4  [ENTENDER]
