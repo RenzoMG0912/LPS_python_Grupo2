@@ -241,7 +241,12 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle('Reconocimiento de Lengua de Señas Peruana - LSP-ML')
-        self.setFixedSize(1200, 800)
+        # Ventana redimensionable: setFixedSize desactiva el boton de maximizar y el borde para
+        # estirar. El minimo es lo que exige la pantalla mas ancha (Entrenamiento pide 1125 px de
+        # contenido, que con los margenes de la ventana son ~1245): por debajo, esa pantalla se
+        # aprieta. Cabe en un portatil de 1366x768 y no limita nada en pantallas grandes.
+        self.setMinimumSize(1250, 690)
+        self.resize(1280, 800)   # un poco mas ancha que el minimo, parecida a la original
         self.setWindowIcon(QIcon("icons/windowLogo.png"))
 
         self.stacked_widget = QStackedWidget()
@@ -254,6 +259,18 @@ class MainWindow(QMainWindow):
         self.stacked_widget.addWidget(self.gtos)
 
         self.center()
+
+    def keyPressEvent(self, event):
+        """F11 alterna pantalla completa (sin bordes) y Escape sale de ella."""
+        if event.key() == Qt.Key_F11:
+            if self.isFullScreen():
+                self.showNormal()
+            else:
+                self.showFullScreen()
+        elif event.key() == Qt.Key_Escape and self.isFullScreen():
+            self.showNormal()
+        else:
+            return super().keyPressEvent(event)
 
     def center(self):
         screen = QDesktopWidget().availableGeometry().center()

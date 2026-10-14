@@ -18,9 +18,9 @@ import cv2
 import mediapipe as mp
 import numpy as np
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QImage, QPixmap
+from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (QApplication, QCheckBox, QHBoxLayout, QLabel, QMessageBox,
-                              QPlainTextEdit, QPushButton, QVBoxLayout, QWidget)
+                              QPlainTextEdit, QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,6 +30,7 @@ import lsp_dynamic_live as env
 import lsp_dynamic_train as tl
 from dynamic_camera import AMARILLO, BLANCO, NARANJA, VERDE
 from dynamic_testing_widget import NOMBRES_MODELO
+from qt_video import mostrar_frame
 
 warnings.filterwarnings("ignore", category=UserWarning, module='google.protobuf')
 warnings.filterwarnings("ignore", category=DeprecationWarning, module='mediapipe')
@@ -38,7 +39,6 @@ warnings.filterwarnings("ignore", message="Feedback manager requires a model wit
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SONIDOS_DIR = os.path.join(ROOT_DIR, 'Sonidos')
 
-ANCHO_VISTA = 800            # ancho al que se reduce el cuadro antes de mostrarlo
 REPETIR_ANUNCIO_SEGUNDOS = 3.0   # si repites la misma sena, se vuelve a decir cada estos segundos
 
 ESTILO_BOTON = ("QPushButton { border: 3px solid black; border-radius: 10px; background-color: orange; "
@@ -54,14 +54,11 @@ TEXTO_ESTADO = {env.QUIETO: ('Haz la sena cuando quieras', VERDE),
 def _anotar(frame, resultado, segmentador, fps):
     """Copia del frame con el esqueleto y el estado dibujados encima.
 
-    Se dibuja despues de reducir la imagen, para que el grosor de las lineas no dependa de la
-    resolucion que entrego la camara.
+    Se deja el cuadro al tamano con que lo entrego la camara: el escalado al espacio
+    disponible lo hace la etiqueta (GUI/qt_video.py), asi al maximizar la ventana el video se
+    agranda sin perder la proporcion.
     """
-    alto, ancho = frame.shape[:2]
-    if ancho > ANCHO_VISTA:
-        vista = cv2.resize(frame, (ANCHO_VISTA, int(round(alto * ANCHO_VISTA / ancho))), interpolation=cv2.INTER_AREA)
-    else:
-        vista = frame.copy()
+    vista = frame.copy()
 
     dibujo = mp.solutions.drawing_utils
     if resultado.pose_landmarks:
@@ -194,10 +191,12 @@ class DynamicLiveWidget(QWidget):
         fila = QHBoxLayout()
 
         self.video_label = QLabel(self)
-        self.video_label.setFixedSize(ANCHO_VISTA, 470)
+        self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # Crece con la ventana; el cuadro se escala para llenarla sin deformarse.
+        self.video_label.setMinimumSize(480, 360)
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("background-color: black;")
-        fila.addWidget(self.video_label)
+        fila.addWidget(self.video_label, 1)
 
         columna = QVBoxLayout()
 
@@ -367,9 +366,8 @@ class DynamicLiveWidget(QWidget):
             QMessageBox.warning(self, 'Camara', motivo)
 
     def _pintar(self, frame):
-        alto, ancho = frame.shape[:2]
-        imagen = QImage(frame.data, ancho, alto, 3 * ancho, QImage.Format_BGR888).copy()
-        self.video_label.setPixmap(QPixmap.fromImage(imagen))
+        """Muestra el cuadro escalado al espacio disponible de la etiqueta."""
+        mostrar_frame(self.video_label, frame)
 
     def _actualizar_estado(self, datos):
         texto, _ = TEXTO_ESTADO.get(datos['estado'], ('', None))

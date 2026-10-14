@@ -10,11 +10,13 @@ import numpy as np
 import pygame
 from PIL import Image, ImageDraw, ImageFont
 from PyQt5.QtCore import QSize, Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QCursor, QFont, QIcon, QImage, QPixmap
+from PyQt5.QtGui import QCursor, QFont, QIcon
 from PyQt5.QtWidgets import (QApplication, QHBoxLayout, QLabel, QMessageBox,
                               QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from qt_video import mostrar_frame
 from lsp_features import extraer_vector
 from lsp_tts import Hablante
 
@@ -73,11 +75,13 @@ class TestingWidget(QWidget):
 
         self.video_label = QLabel(self)
         self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.video_label.setFixedSize(1150, 550)
-        self.video_label.setAlignment(Qt.AlignTop)
+        # Crece con la ventana: al maximizar, el video ocupa todo el espacio disponible.
+        self.video_label.setMinimumSize(480, 340)
+        self.video_label.setAlignment(Qt.AlignCenter)
+        self.video_label.setStyleSheet("background-color: black;")
         right_column_layout.addWidget(self.video_label)
 
-        second_row_layout.addLayout(right_column_layout)
+        second_row_layout.addLayout(right_column_layout, 1)   # el video se lleva el espacio extra
 
         left_column_layout = QVBoxLayout()
         left_column_layout.setAlignment(Qt.AlignCenter | Qt.AlignTop)
@@ -119,6 +123,9 @@ class TestingWidget(QWidget):
         self.model_status_label = QLabel(self)
         self.model_status_label.setFont(QFont("Arial", 10))
         self.model_status_label.setWordWrap(True)
+        # Ancho fijo: con wordWrap su sizeHint es el de la linea mas larga (~1100 px) y se quedaba
+        # con el ancho de la ventana, dejando al video en su tamano minimo.
+        self.model_status_label.setFixedWidth(260)
         self.model_status_label.setStyleSheet("border: 3px solid black; border-radius: 10px; background-color: #FFF3CD; color: black; padding: 5px;")
         self.model_status_label.setAlignment(Qt.AlignCenter)
         left_column_layout.addWidget(self.model_status_label)
@@ -329,10 +336,7 @@ class TestingWidget(QWidget):
         if texto_predicho is not None:
             frame_bgr = self.dibujar_texto(frame_bgr, texto_predicho, (20, 20), tamano_fuente=60)
 
-        h, w, ch = frame_bgr.shape
-        bytes_per_line = ch * w
-        convert_to_Qt_format = QImage(frame_bgr.data, w, h, bytes_per_line, QImage.Format_BGR888)
-        self.video_label.setPixmap(QPixmap.fromImage(convert_to_Qt_format))
+        mostrar_frame(self.video_label, frame_bgr)
 
 
 if __name__ == "__main__":
